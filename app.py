@@ -17,17 +17,25 @@ def home():
     """Serve the frontend page (GUI)."""
     return render_template('index.html')
 
-# Function to start a node in a new console window
+
+# Function to start a node in a new console (compatible with Linux/Render)
 def run_node(script_name):
     try:
-        subprocess.Popen(
-            f"python {script_name}",
-            shell=True,
-            creationflags=subprocess.CREATE_NEW_CONSOLE
+        process = subprocess.Popen(
+            ["python", script_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
-        print(f" Started: {script_name}")
+        # Capture output and errors for debugging
+        out, err = process.communicate()
+        print(f"✅ Started: {script_name}")
+        if out:
+            print(f"Output: {out.decode()}")
+        if err:
+            print(f"Error: {err.decode()}")
     except Exception as e:
-        print(f" Error starting {script_name}: {e}")
+        print(f"❌ Error starting {script_name}: {e}")
+
 
 @app.route('/start_nodes', methods=['GET'])
 def start_nodes():
@@ -38,13 +46,15 @@ def start_nodes():
         threading.Thread(target=run_node, args=(node,)).start()
         time.sleep(2)  # Small delay for stability
 
-    return jsonify({"message": " Transcription, POS Tagging, and Coordinator nodes started!"})
+    return jsonify({"message": "✅ Transcription, POS Tagging, and Coordinator nodes started!"})
+
 
 @app.route('/start_recording', methods=['GET'])
 def start_recording():
     """Starts DC0 (audio recording)."""
     threading.Thread(target=run_node, args=("DC0.py",)).start()
     return jsonify({"message": "🎤 Audio recording started!"})
+
 
 @app.route('/receive_pos_tags', methods=['POST'])
 def receive_pos_tags():
@@ -56,30 +66,34 @@ def receive_pos_tags():
 
         if pos_tags:
             pos_tag_results = pos_tags  # Update global list
-            return jsonify({"message": " POS tags received successfully!"})
+            return jsonify({"message": "✅ POS tags received successfully!"})
         else:
-            return jsonify({"error": " No POS tags received"}), 400
+            return jsonify({"error": "⚠️ No POS tags received"}), 400
     except Exception as e:
-        return jsonify({"error": f" Error processing POS tags: {e}"}), 500
+        return jsonify({"error": f"⚠️ Error processing POS tags: {e}"}), 500
+
 
 @app.route('/get_pos_tags', methods=['GET'])
 def get_pos_tags():
     """Sends stored POS tags to the frontend."""
     return jsonify({"pos_tags": pos_tag_results})
 
+
 def is_port_in_use(port):
     """Check if a port is already in use."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
+
 if __name__ == '__main__':
     try:
-        PORT = 5000
+        # Use Render's dynamic port or default to 5000 locally
+        PORT = int(os.environ.get("PORT", 5000))
 
         if is_port_in_use(PORT):
-            print(f" Port {PORT} is already in use. Try a different port.")
+            print(f"❌ Port {PORT} is already in use. Try a different port.")
         else:
-            print(" Starting Flask backend...")
-            app.run(host="127.0.0.1", port=PORT, debug=False, use_reloader=False)
+            print(f"🚀 Starting Flask backend on port {PORT}...")
+            app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
     except Exception as e:
-        print(f" Error starting Flask server: {e}")
+        print(f"❌ Error starting Flask server: {e}")
