@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Computing GUI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #121212; color: white; }
+        button { padding: 10px 20px; margin: 10px; font-size: 18px; background: #2196F3; color: white; border: none; cursor: pointer; }
+        .output-container { margin-top: 20px; padding: 20px; background: #1e1e1e; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>🚀 Distributed Computing GUI</h1>
+
+    <button onclick="startNodes()">Start All Nodes</button>
+    <button onclick="startRecording()">Start Recording</button>
+    <button onclick="fetchPosTags()">Get POS Tagged Words</button>
+
+    <h2>📌 POS Tagged Words</h2>
+    <div class="output-container" id="output">Waiting for output...</div>
+
+    <script>
+        var socket = io.connect("http://127.0.0.1:5000");
+
+        function startNodes() {
+            socket.emit('start_nodes');
+        }
+
+        function startRecording() {
+            socket.emit('start_recording');
+        }
+
+        function fetchPosTags() {
+            socket.emit('get_pos_tags');
+        }
+
+        socket.on('nodes_started', function(data) {
+            alert(data.message);
+        });
+
+        socket.on('recording_started', function(data) {
+            alert(data.message);
+        });
+
+        socket.on('pos_tags', function(data) {
+            let outputDiv = document.getElementById("output");
+            outputDiv.innerHTML = "";
+            data.pos_tags.forEach(taggedWord => {
+                let p = document.createElement("p");
+                p.innerHTML = `<strong>${taggedWord[0]}</strong> → ${taggedWord[1]}`;
+                outputDiv.appendChild(p);
+            });
+        });
+    </script>
+
+</body>
+</html>
