@@ -3,14 +3,17 @@ import subprocess
 import threading
 import time
 from flask import Flask, render_template, request, jsonify
-from flask_cors import CORS  # Enable CORS for frontend communication
+from flask_cors import CORS
 import socket
+import atexit
 
-app = Flask(__name__, template_folder="templates")  # Serve HTML from "templates"
-CORS(app)  # Allow frontend requests
+app = Flask(__name__, template_folder="templates")
+CORS(app)
 
 # Store POS tags received from DC3
 pos_tag_results = []
+pos_tag_lock = threading.Lock()
+processes = []
 
 @app.route('/')
 def home():
@@ -20,11 +23,11 @@ def home():
 # Function to start a node in a new console window
 def run_node(script_name):
     try:
-        subprocess.Popen(
-            f"python {script_name}",
-            shell=True,
-            creationflags=subprocess.CREATE_NEW_CONSOLE
+        proc = subprocess.Popen(
+            ["python", script_name],
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
         )
+        processes.append(proc)
         print(f"✅ Started: {script_name}")
     except Exception as e:
         print(f"❌ Error starting {script_name}: {e}")
@@ -32,11 +35,11 @@ def run_node(script_name):
 @app.route('/start_nodes', methods=['GET'])
 def start_nodes():
     """Starts DC1, DC2, and DC3 nodes."""
-    nodes = ["DC1.py", "DC2.py", "DC3.py"]  # Excluding DC0 (audio recording)
+    nodes = ["DC1.py", "DC2.py", "DC3.py"]
 
     for node in nodes:
         threading.Thread(target=run_node, args=(node,)).start()
-        time.sleep(2)  # Small delay for stability
+        time.sleep(5)  # Increase delay for stability
 
     return jsonify({"message": "✅ Transcription, POS Tagging, and Coordinator nodes started!"})
 
@@ -55,7 +58,8 @@ def receive_pos_tags():
         pos_tags = data.get("pos_tags", [])
 
         if pos_tags:
-            pos_tag_results = pos_tags  # Update global list
+            with pos_tag_lock:
+                pos_tag_results = pos_tags
             return jsonify({"message": "✅ POS tags received successfully!"})
         else:
             return jsonify({"error": "⚠️ No POS tags received"}), 400
@@ -65,21 +69,29 @@ def receive_pos_tags():
 @app.route('/get_pos_tags', methods=['GET'])
 def get_pos_tags():
     """Sends stored POS tags to the frontend."""
-    return jsonify({"pos_tags": pos_tag_results})
+    with pos_tag_lock:
+        return jsonify({"pos_tags": pos_tag_results})
 
 def is_port_in_use(port):
     """Check if a port is already in use."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
+# Cleanup on exit
+def cleanup():
+    for proc in processes:
+        proc.terminate()
+        proc.wait()
+    print("🧹 Cleaned up processes!")
+
+atexit.register(cleanup)
+
 if __name__ == '__main__':
     try:
         PORT = 5000
-
-        if is_port_in_use(PORT):
-            print(f"❌ Port {PORT} is already in use. Try a different port.")
-        else:
-            print("🚀 Starting Flask backend...")
-            app.run(host="127.0.0.1", port=PORT, debug=False, use_reloader=False)
+        while is_port_in_use(PORT):
+            PORT += 1
+        print(f"🚀 Starting Flask backend on port {PORT}...")
+        app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
     except Exception as e:
         print(f"❌ Error starting Flask server: {e}")
