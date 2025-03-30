@@ -17,25 +17,17 @@ def home():
     """Serve the frontend page (GUI)."""
     return render_template('index.html')
 
-
-# Function to start a node in a new console (compatible with Linux/Render)
+# Function to start a node in a new console window
 def run_node(script_name):
     try:
-        process = subprocess.Popen(
-            ["python", script_name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+        subprocess.Popen(
+            f"python {script_name}",
+            shell=True,
+            creationflags=subprocess.CREATE_NEW_CONSOLE
         )
-        # Capture output and errors for debugging
-        out, err = process.communicate()
         print(f"✅ Started: {script_name}")
-        if out:
-            print(f"Output: {out.decode()}")
-        if err:
-            print(f"Error: {err.decode()}")
     except Exception as e:
         print(f"❌ Error starting {script_name}: {e}")
-
 
 @app.route('/start_nodes', methods=['GET'])
 def start_nodes():
@@ -48,13 +40,11 @@ def start_nodes():
 
     return jsonify({"message": "✅ Transcription, POS Tagging, and Coordinator nodes started!"})
 
-
 @app.route('/start_recording', methods=['GET'])
 def start_recording():
     """Starts DC0 (audio recording)."""
     threading.Thread(target=run_node, args=("DC0.py",)).start()
     return jsonify({"message": "🎤 Audio recording started!"})
-
 
 @app.route('/receive_pos_tags', methods=['POST'])
 def receive_pos_tags():
@@ -72,28 +62,24 @@ def receive_pos_tags():
     except Exception as e:
         return jsonify({"error": f"⚠️ Error processing POS tags: {e}"}), 500
 
-
 @app.route('/get_pos_tags', methods=['GET'])
 def get_pos_tags():
     """Sends stored POS tags to the frontend."""
     return jsonify({"pos_tags": pos_tag_results})
-
 
 def is_port_in_use(port):
     """Check if a port is already in use."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
-
 if __name__ == '__main__':
     try:
-        # Use Render's dynamic port or default to 5000 locally
-        PORT = int(os.environ.get("PORT", 5000))
+        PORT = 5000
 
         if is_port_in_use(PORT):
             print(f"❌ Port {PORT} is already in use. Try a different port.")
         else:
-            print(f"🚀 Starting Flask backend on port {PORT}...")
-            app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
+            print("🚀 Starting Flask backend...")
+            app.run(host="127.0.0.1", port=PORT, debug=False, use_reloader=False)
     except Exception as e:
         print(f"❌ Error starting Flask server: {e}")
